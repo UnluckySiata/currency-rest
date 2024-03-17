@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strings"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
@@ -44,6 +46,39 @@ func (fr *FrankfurterResponse) get(w http.ResponseWriter, s string, e string, b 
 	return nil
 }
 
+type EconomiaRecord struct {
+	High      string `json:"high"`
+	Low       string `json:"low"`
+	Timestamp string `json:"timestamp"`
+}
+
+type EconomiaResponse []EconomiaRecord
+
+func (er *EconomiaResponse) get(w http.ResponseWriter, s string, e string, b string, t string, c int64) error {
+	s = strings.Replace(s, "-", "", -1)
+	e = strings.Replace(e, "-", "", -1)
+
+	reqURL := fmt.Sprintf("https://economia.awesomeapi.com.br/%s-%s/%d?start_date=%s&end_date=%s", b, t, c, s, e)
+	resp, err := http.Get(reqURL)
+	fmt.Println(reqURL)
+
+	if err != nil {
+		errMsg := fmt.Sprintf("Error fetching from %s: %v", reqURL, err)
+		http.Error(w, errMsg, http.StatusInternalServerError)
+		return err
+	}
+
+	err = json.NewDecoder(resp.Body).Decode(er)
+	if err != nil {
+		errMsg := fmt.Sprintf("Server errored while processing data from %s", reqURL)
+		http.Error(w, errMsg, http.StatusInternalServerError)
+		fmt.Printf("e: %v\n", err)
+		return err
+	}
+
+	return nil
+}
+
 func neededFormFields() []string {
 	return []string{"base-curr", "target-curr", "start-date", "end-date"}
 }
@@ -70,13 +105,37 @@ func getResource(w http.ResponseWriter, r *http.Request) {
 	b := params["base-curr"]
 	t := params["target-curr"]
 
+	sd, err := time.Parse(time.DateOnly, s)
+	if err != nil {
+		http.Error(w, "Wrong start-date format", http.StatusBadRequest)
+		return
+	}
+
+	ed, err := time.Parse(time.DateOnly, e)
+	if err != nil {
+		http.Error(w, "Wrong end-date format", http.StatusBadRequest)
+		return
+	}
+
+	daysBetween := (ed.Unix() - sd.Unix()) / 86400
+	if daysBetween < 0 {
+		http.Error(w, "end-date can't be earlier than start-date", http.StatusBadRequest)
+		return
+	}
+
 	frResp := new(FrankfurterResponse)
-	err := frResp.get(w, s, e, b, t)
+	err = frResp.get(w, s, e, b, t)
 	if err != nil {
 		return
 	}
 
-	fmt.Printf("%+v\n", *frResp)
+	ecResp := new(EconomiaResponse)
+	err = ecResp.get(w, s, e, b, t, daysBetween)
+	if err != nil {
+		return
+	}
+
+	fmt.Printf("%+v\n", *ecResp)
 }
 
 func main() {
