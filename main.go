@@ -4,12 +4,15 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 )
+
+const bitSize = 64
 
 type FrankfurterResponse struct {
 	Amount    float64                       `json:"amount"`
@@ -58,9 +61,8 @@ func (er *EconomiaResponse) get(w http.ResponseWriter, s string, e string, b str
 	s = strings.Replace(s, "-", "", -1)
 	e = strings.Replace(e, "-", "", -1)
 
-	reqURL := fmt.Sprintf("https://economia.awesomeapi.com.br/%s-%s/%d?start_date=%s&end_date=%s", b, t, c, s, e)
+	reqURL := fmt.Sprintf("https://economia.awesomeapi.com.br/json/daily/%s-%s/%d?start_date=%s&end_date=%s", b, t, c, s, e)
 	resp, err := http.Get(reqURL)
-	fmt.Println(reqURL)
 
 	if err != nil {
 		errMsg := fmt.Sprintf("Error fetching from %s: %v", reqURL, err)
@@ -81,6 +83,60 @@ func (er *EconomiaResponse) get(w http.ResponseWriter, s string, e string, b str
 
 func neededFormFields() []string {
 	return []string{"base-curr", "target-curr", "start-date", "end-date"}
+}
+
+type Result struct {
+	min     float64
+	max     float64
+	mean    float64
+	minDate string
+	maxDate string
+}
+
+func (res *Result) calculate(fr *FrankfurterResponse, er *EconomiaResponse, target string) {
+	minVal := 100000.0
+	maxVal := 0.0
+	sum := 0.0
+	responses := 0
+	var minDate, maxDate string
+
+	for _, e := range *er {
+		t, _ := strconv.ParseInt(e.Timestamp, 10, bitSize)
+		y, m, d := time.Unix(t, 0).Date()
+
+		dd := fmt.Sprint(d)
+		mm := fmt.Sprint(int(m))
+		if d < 10 {
+			dd = "0" + dd
+		}
+		if m < 10 {
+			mm = "0" + mm
+		}
+
+		date := fmt.Sprintf("%d-%s-%s", y, mm, dd)
+		f := fr.Rates[date]
+
+		low, _ := strconv.ParseFloat(e.Low, bitSize)
+		high, _ := strconv.ParseFloat(e.High, bitSize)
+		mid := f[target]
+
+		mean := (low + mid + high) / 3.0
+		sum += mean
+		responses++
+
+		if mean < minVal {
+			minVal = mean
+			minDate = date
+		} else if mean > maxVal {
+			maxVal = mean
+			maxDate = date
+		}
+	}
+	res.max = maxVal
+	res.min = minVal
+	res.minDate = minDate
+	res.maxDate = maxDate
+	res.mean = sum / float64(responses)
 }
 
 func startPage(w http.ResponseWriter, r *http.Request) {
@@ -135,7 +191,9 @@ func getResource(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	fmt.Printf("%+v\n", *ecResp)
+	res := new(Result)
+	res.calculate(frResp, ecResp, t)
+	fmt.Printf("%+v\n", res)
 }
 
 func main() {
