@@ -142,7 +142,8 @@ func (res *Result) calculate(fr *FrankfurterResponse, er *EconomiaResponse, targ
 		if mean < minVal {
 			minVal = mean
 			minDate = date
-		} else if mean > maxVal {
+		}
+        if mean > maxVal {
 			maxVal = mean
 			maxDate = date
 		}
