@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"html/template"
 	"net/http"
 	"strconv"
 	"strings"
@@ -10,9 +11,14 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
+	"github.com/rmg/iso4217"
 )
 
 const bitSize = 64
+
+type FormInfo struct {
+	Today string
+}
 
 type FrankfurterResponse struct {
 	Amount    float64                       `json:"amount"`
@@ -86,11 +92,15 @@ func neededFormFields() []string {
 }
 
 type Result struct {
-	min     float64
-	max     float64
-	mean    float64
-	minDate string
-	maxDate string
+	Min      string
+	Max      string
+	Mean     string
+	MinDate  string
+	MaxDate  string
+	DateFrom string
+	DateTo   string
+	CurrFrom string
+	CurrTo   string
 }
 
 func (res *Result) calculate(fr *FrankfurterResponse, er *EconomiaResponse, target string) {
@@ -120,7 +130,12 @@ func (res *Result) calculate(fr *FrankfurterResponse, er *EconomiaResponse, targ
 		high, _ := strconv.ParseFloat(e.High, bitSize)
 		mid := f[target]
 
-		mean := (low + mid + high) / 3.0
+		var mean float64
+		if mid > 0.0 {
+			mean = (low + mid + high) / 3.0
+		} else {
+			mean = (low + high) / 2.0
+		}
 		sum += mean
 		responses++
 
@@ -132,15 +147,31 @@ func (res *Result) calculate(fr *FrankfurterResponse, er *EconomiaResponse, targ
 			maxDate = date
 		}
 	}
-	res.max = maxVal
-	res.min = minVal
-	res.minDate = minDate
-	res.maxDate = maxDate
-	res.mean = sum / float64(responses)
+	res.Max = fmt.Sprintf("%.5f", maxVal)
+	res.Min = fmt.Sprintf("%.5f", minVal)
+	res.MinDate = minDate
+	res.MaxDate = maxDate
+	res.Mean = fmt.Sprintf("%.5f", sum/float64(responses))
 }
 
 func startPage(w http.ResponseWriter, r *http.Request) {
-	http.ServeFile(w, r, "html/index.html")
+	y, m, d := time.Now().Date()
+	var mm, dd string
+	mm = fmt.Sprint(int(m))
+	dd = fmt.Sprint(d)
+
+	if m < 10 {
+		mm = "0" + mm
+	}
+	if d < 10 {
+		dd = "0" + dd
+	}
+
+	fi := FormInfo{
+		Today: fmt.Sprintf("%d-%s-%s", y, mm, dd),
+	}
+	tmpl := template.Must(template.ParseFiles("html/index.html"))
+	tmpl.Execute(w, fi)
 }
 
 func getResource(w http.ResponseWriter, r *http.Request) {
@@ -158,8 +189,8 @@ func getResource(w http.ResponseWriter, r *http.Request) {
 	}
 	s := params["start-date"]
 	e := params["end-date"]
-	b := params["base-curr"]
-	t := params["target-curr"]
+	b := strings.ToUpper(params["base-curr"])
+	t := strings.ToUpper(params["target-curr"])
 
 	sd, err := time.Parse(time.DateOnly, s)
 	if err != nil {
@@ -179,9 +210,27 @@ func getResource(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	code, minor := iso4217.ByName(b)
+	if code == 0 && minor == 0 {
+		errMsg := fmt.Sprintf("%s passed as base-curr is not a valid ISO-4217 currency", b)
+		http.Error(w, errMsg, http.StatusBadRequest)
+		return
+	}
+
+	code, minor = iso4217.ByName(t)
+	if code == 0 && minor == 0 {
+		errMsg := fmt.Sprintf("%s passed as target-curr is not a valid ISO-4217 currency", t)
+		http.Error(w, errMsg, http.StatusBadRequest)
+		return
+	}
+
 	frResp := new(FrankfurterResponse)
 	err = frResp.get(w, s, e, b, t)
 	if err != nil {
+		return
+	}
+	if len(frResp.Rates) == 0 {
+		http.Error(w, "Frankfurter api resource not found", http.StatusNotFound)
 		return
 	}
 
@@ -190,10 +239,21 @@ func getResource(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		return
 	}
+	if len(*ecResp) == 0 {
+		http.Error(w, "Economia api resource not found", http.StatusNotFound)
+		return
+	}
 
 	res := new(Result)
+	res.DateFrom = s
+	res.DateTo = e
+	res.CurrFrom = b
+	res.CurrTo = t
+
 	res.calculate(frResp, ecResp, t)
-	fmt.Printf("%+v\n", res)
+
+	tmpl := template.Must(template.ParseFiles("html/result.html"))
+	tmpl.Execute(w, res)
 }
 
 func main() {

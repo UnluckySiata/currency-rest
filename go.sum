@@ -1,2 +1,4 @@
 github.com/go-chi/chi/v5 v5.0.12 h1:9euLV5sTrTNTRUU9POmDUvfxyj6LAABLUcEWO+JJb4s=
 github.com/go-chi/chi/v5 v5.0.12/go.mod h1:DslCQbL2OYiznFReuXYUmQ2hGd1aDpCnlMNITLSKoi8=
+github.com/rmg/iso4217 v1.0.1 h1:/SDfkluJ/LN8BfNfo4DVGXNjeLdNLcKHFxE9H8z/0bA=
+github.com/rmg/iso4217 v1.0.1/go.mod h1:AbFI9wPu0EAO+Q6swPiMEfAtyz7T7EfNigAOKNNyiBE=
