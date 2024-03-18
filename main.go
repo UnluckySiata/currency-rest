@@ -21,22 +21,11 @@ type FormInfo struct {
 }
 
 type FrankfurterResponse struct {
-	Amount    float64                       `json:"amount"`
-	Base      string                        `json:"base"`
-	StartDate string                        `json:"start_date"`
-	EndDate   string                        `json:"end_date"`
-	Rates     map[string]map[string]float64 `json:"rates"`
+	Rates map[string]map[string]float64 `json:"rates"`
 }
 
 func (fr *FrankfurterResponse) get(w http.ResponseWriter, s string, e string, b string, t string) error {
-	var date string
-	if s == e {
-		date = s
-	} else {
-		date = fmt.Sprintf("%s..%s", s, e)
-	}
-
-	reqURL := fmt.Sprintf("https://api.frankfurter.app/%s?from=%s&to=%s", date, b, t)
+	reqURL := fmt.Sprintf("https://api.frankfurter.app/%s..%s?from=%s&to=%s", s, e, b, t)
 	resp, err := http.Get(reqURL)
 
 	if err != nil {
