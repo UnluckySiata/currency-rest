@@ -45,9 +45,9 @@ func (fr *FrankfurterResponse) get(w http.ResponseWriter, s string, e string, b 
 		return err
 	}
 
-    if resp.StatusCode == http.StatusNotFound {
-        return nil
-    }
+	if resp.StatusCode == http.StatusNotFound {
+		return nil
+	}
 
 	err = json.NewDecoder(resp.Body).Decode(fr)
 	if err != nil {
@@ -80,9 +80,9 @@ func (er *EconomiaResponse) get(w http.ResponseWriter, s string, e string, b str
 		return err
 	}
 
-    if resp.StatusCode == http.StatusNotFound {
-        return nil
-    }
+	if resp.StatusCode == http.StatusNotFound {
+		return nil
+	}
 
 	err = json.NewDecoder(resp.Body).Decode(er)
 	if err != nil {
@@ -151,7 +151,7 @@ func (res *Result) calculate(fr *FrankfurterResponse, er *EconomiaResponse, targ
 			minVal = mean
 			minDate = date
 		}
-        if mean > maxVal {
+		if mean > maxVal {
 			maxVal = mean
 			maxDate = date
 		}
