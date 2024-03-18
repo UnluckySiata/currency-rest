@@ -45,6 +45,10 @@ func (fr *FrankfurterResponse) get(w http.ResponseWriter, s string, e string, b 
 		return err
 	}
 
+    if resp.StatusCode == http.StatusNotFound {
+        return nil
+    }
+
 	err = json.NewDecoder(resp.Body).Decode(fr)
 	if err != nil {
 		errMsg := fmt.Sprintf("Server errored while processing data from %s", reqURL)
@@ -75,6 +79,10 @@ func (er *EconomiaResponse) get(w http.ResponseWriter, s string, e string, b str
 		http.Error(w, errMsg, http.StatusInternalServerError)
 		return err
 	}
+
+    if resp.StatusCode == http.StatusNotFound {
+        return nil
+    }
 
 	err = json.NewDecoder(resp.Body).Decode(er)
 	if err != nil {
